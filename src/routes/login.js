@@ -5,18 +5,33 @@ const cognito = new AWS.CognitoIdentityServiceProvider();
 
 router.post("/", async (req, res) => {
   const { username, password } = req.body;
+
   try {
-    const data = await cognito.initiateAuth({
-      AuthFlow: "USER_PASSWORD_AUTH",
+    // Step 1: Initiate SRP Auth Flow
+    const initiateAuthResponse = await cognito.initiateAuth({
+      AuthFlow: "USER_SRP_AUTH",
       ClientId: process.env.CLIENT_ID,
-      AuthParameters: { USERNAME: username, PASSWORD: password },
+      AuthParameters: {
+        USERNAME: username,
+      },
     }).promise();
+
+    // Step 2: Get the SRP challenge parameters from the response
+    const challengeParameters = initiateAuthResponse.ChallengeParameters;
+    
+    const challenge = {
+      salt: challengeParameters.SALT,
+      secretBlock: challengeParameters.SECRET_BLOCK,
+      username,
+    };
+
+    // Send the challenge back to the frontend
     res.json({
-      message: "Login successful",
-      token: data.AuthenticationResult.IdToken,
-      refreshToken: data.AuthenticationResult.RefreshToken,
+      challenge,
     });
+
   } catch (err) {
+    // If the auth initiation fails
     res.status(401).json({ error: err.message });
   }
 });
