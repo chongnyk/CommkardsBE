@@ -1,0 +1,82 @@
+org: chongnoeleng
+app: commkardsbe
+service: CommkardsBE
+
+stages:
+  default:
+    params:
+      tableName: ${env:TABLE_NAME}
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ${env:REGION}
+  httpApi:
+    cors:
+      allowedOrigins:
+        - "*"
+      allowedMethods:
+        - GET
+        - POST
+        - OPTIONS
+    authorizers:
+      CognitoAuthorizer:
+        identitySource: $request.header.Authorization
+        issuerUrl: https://cognito-idp.${env:REGION}.amazonaws.com/${env:USER_POOL_ID}
+        audience:
+          - ${env:CLIENT_ID}
+  environment:
+    USERS_TABLE: ${env:TABLE_NAME}
+    USER_POOL_ID: ${env:USER_POOL_ID}
+    CLIENT_ID: ${env:CLIENT_ID}
+    REGION: ${env:REGION}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:BatchGetItem
+            - cognito-idp:AdminGetUser
+            - cognito-idp:ListUsers
+            - cognito-idp:AdminCreateUser
+            - cognito-idp:AdminInitiateAuth
+            - cognito-idp:RespondToAuthChallenge
+            - cognito-idp:InitiateAuth
+          Resource:
+            - arn:aws:dynamodb:*:*:table/Decks
+            - arn:aws:dynamodb:*:*:table/Cards
+            - arn:aws:dynamodb:*:*:table/${env:TABLE_NAME}
+            - arn:aws:cognito-idp:${env:REGION}:${aws:accountId}:userpool/${env:USER_POOL_ID}
+
+custom:
+  userPoolId: ${env:USER_POOL_ID}
+  clientId: ${env:CLIENT_ID}
+
+functions:
+  api:
+    handler: src/handler.handler
+    events:
+      - httpApi:
+          path: /{proxy+}
+          method: any
+
+resources:
+  Resources:
+    UsersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${env:TABLE_NAME}
